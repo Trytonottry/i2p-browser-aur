@@ -1,38 +1,40 @@
-name: Build & Release
+name: AUR Publish
 
 on:
   push:
     tags:
       - 'v*'
-  release:
-    types: [published]
   workflow_dispatch:
 
 jobs:
-  build:
+  aur-publish:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
       options: --privileged
 
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git wget unzip libarchive namcap python-pygments python-srcinfo sudo
+          pacman -S --noconfirm \
+            base-devel git wget unzip \
+            java-runtime namcap \
+            python-pygments python-srcinfo \
+            sudo
 
-      - name: Setup builder user & copy repo
+      - name: Create builder user
         run: |
           useradd -m -s /bin/bash builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
-          cp -r /github/workspace/* /home/builder/ 2>/dev/null || true
-          cp -r /github/workspace/.* /home/builder/ 2>/dev/null || true
+          cp -r /github/workspace/* /home/builder/ || true
+          cp -r /github/workspace/.* /home/builder/ || true
           chown -R builder:builder /home/builder
 
-      - name: Install pkgfmt (AUR)
+      - name: Install pkgfmt
         run: |
           sudo -u builder bash -c '
             cd /tmp
@@ -41,7 +43,7 @@ jobs:
             makepkg -si --noconfirm --nocheck --nosign
           '
 
-      - name: Init pacman keys
+      - name: Init keys
         run: |
           pacman-key --init
           pacman-key --populate archlinux
@@ -50,47 +52,40 @@ jobs:
         run: |
           sudo -u builder bash -c "cd /home/builder && makepkg --printsrcinfo > .SRCINFO"
 
-      - name: Lint & Format
+      - name: Lint
         run: |
-          sudo -u builder bash -c "cd /home/builder && pkgfmt -w PKGBUILD || true"
           sudo -u builder bash -c "cd /home/builder && namcap PKGBUILD || true"
 
-      - name: Download source (fallback)
-        run: |
-          sudo -u builder bash -c '
-            cd /home/builder
-            if [[ ! -f "i2p-browser.tar.xz" ]]; then
-              urls=(
-                "https://download.i2p2.de/releases/i2pbrowser/2.0-beta4/i2p-browser-linux64-2.0-beta4_en-US.tar.xz"
-                "https://mirror.cyberbits.eu/i2p/releases/i2pbrowser/2.0-beta4/i2p-browser-linux64-2.0-beta4_en-US.tar.xz"
-                "https://mirror2.i2p2.no/releases/i2pbrowser/2.0-beta4/i2p-browser-linux64-2.0-beta4_en-US.tar.xz"
-              )
-              for url in "${urls[@]}"; do
-                wget --tries=3 --timeout=60 -O i2p-browser.tar.xz "$url" && break
-              done
-              [[ -f "i2p-browser.tar.xz" ]] || exit 1
-            fi
-          '
-
-      - name: Build package
+      - name: Build package (test)
         run: |
           sudo -u builder bash -c "cd /home/builder && makepkg -sf --noconfirm --nocheck --nosign"
-
-      - name: Copy artifacts
-        run: |
-          cp /home/builder/*.pkg.tar.zst . || true
-          cp /home/builder/.SRCINFO . || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: i2p-browser-pkg
           path: |
-            *.pkg.tar.zst
-            .SRCINFO
+            /home/builder/*.pkg.tar.zst
+            /home/builder/.SRCINFO
 
-      - name: Create Release
+      # === ПУШ В AUR ===
+      - name: Push to AUR
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: "*.pkg.tar.zst"
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_USERNAME: trytonottry
+        run: |
+          mkdir -p /home/builder/.ssh
+          echo "$AUR_SSH_PRIVATE_KEY" > /home/builder/.ssh/id_rsa
+          chmod 600 /home/builder/.ssh/id_rsa
+          chown builder:builder /home/builder/.ssh/id_rsa
+
+          sudo -u builder bash -c '
+            cd /home/builder
+            git config --global user.name "Trytonottry"
+            git config --global user.email "trytonottry@proton.me"
+            git remote add aur ssh://aur@aur.archlinux.org/i2p-browser.git
+            git add PKGBUILD .SRCINFO
+            git commit -m "Update to $(git describe --tags --abbrev=0)"
+            git push aur master --force
+          '
