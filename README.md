@@ -1,5 +1,5 @@
 # i2p-browser (AUR package)
-![Sync to AUR](https://github.com/Trytonottry/i2p-browser-aur/actions/workflows/aur-sync.yml/badge.svg)
+
 [![AUR](https://img.shields.io/badge/AUR-i2p--browser-blue)](https://aur.archlinux.org/packages/i2p-browser)
 ![AUR version](https://img.shields.io/aur/version/i2p-browser)
 ![License](https://img.shields.io/github/license/Trytonottry/i2p-browser-aur)
