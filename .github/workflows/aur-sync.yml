@@ -9,6 +9,8 @@ on:
       - .SRCINFO
       - '*.install'
       - '*.patch'
+      
+  workflow_dispatch:
 
 jobs:
   sync:
