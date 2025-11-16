@@ -58,7 +58,7 @@ jobs:
       # --- Commit + push to AUR
       - name: Push to AUR
         run: |
-          git add PKGBUILD .SRCINFO
+          git add PKGBUILD 
           git commit -m "Auto sync from GitHub" || true
           git push aur HEAD:master || true
 
