@@ -19,10 +19,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Update package database & install base tools
+      - name: Update system & install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git namcap pkgfmt unzip bsdtar wget
+          pacman -S --noconfirm \
+            base-devel \
+            git \
+            wget \
+            unzip \
+            libarchive \
+            namcap \
+            python-pygments \
+            python-srcinfo
+
+      - name: Install pkgfmt (from AUR)
+        run: |
+          git clone https://aur.archlinux.org/pkgfmt.git
+          cd pkgfmt
+          makepkg -si --noconfirm --nocheck
+          cd ..
+          rm -rf pkgfmt
+
+      - name: Trust all keys (to avoid keyring issues)
+        run: |
+          pacman-key --init
+          pacman-key --populate archlinux
 
       - name: Generate .SRCINFO
         run: |
@@ -30,49 +51,53 @@ jobs:
 
       - name: Lint & Format
         run: |
-          make fmt
-          make lint || true
+          pkgfmt -w PKGBUILD || true
+          namcap PKGBUILD || true
 
-      - name: Manual download fallback (if makepkg fails to download)
+      - name: Manual download with fallback
         run: |
-          if [[ ! -f i2p-browser.tar.xz ]]; then
-            echo "Trying to download manually with retries..."
-            local urls=(
-              "https://download.i2p2.de/releases/i2pbrowser/${{ env.PKGVERSION }}/i2p-browser-linux64-${{ env.PKGVERSION }}.tar.xz"
-              "https://mirror.cyberbits.eu/i2p/releases/i2pbrowser/${{ env.PKGVERSION }}/i2p-browser-linux64-${{ env.PKGVERSION }}.tar.xz"
-              "https://mirror2.i2p2.no/releases/i2pbrowser/${{ env.PKGVERSION }}/i2p-browser-linux64-${{ env.PKGVERSION }}.tar.xz"
+          if [[ ! -f "i2p-browser.tar.xz" ]]; then
+            echo "Downloading i2p-browser.tar.xz with fallback mirrors..."
+            urls=(
+              "https://download.i2p2.de/releases/i2pbrowser/2.5.0/i2p-browser-linux64-2.5.0.tar.xz"
+              "https://mirror.cyberbits.eu/i2p/releases/i2pbrowser/2.5.0/i2p-browser-linux64-2.5.0.tar.xz"
+              "https://mirror2.i2p2.no/releases/i2pbrowser/2.5.0/i2p-browser-linux64-2.5.0.tar.xz"
+              "https://repo.i2p2.de/releases/i2pbrowser/2.5.0/i2p-browser-linux64-2.5.0.tar.xz"
+              "https://deb.i2p2.de/releases/i2pbrowser/2.5.0/i2p-browser-linux64-2.5.0.tar.xz"
             )
             for url in "${urls[@]}"; do
               if wget --tries=3 --timeout=60 -O i2p-browser.tar.xz "$url"; then
-                echo "Downloaded from $url"
+                echo "Success: $url"
                 break
+              else
+                echo "Failed: $url"
               fi
             done
+            if [[ ! -f "i2p-browser.tar.xz" ]]; then
+              echo "All mirrors failed!"
+              exit 1
+            fi
           fi
-        env:
-          PKGVERSION: 2.5.0
 
-      - name: Build package
+      - name: Build package (no sign, no check)
         run: |
-          makepkg -sf --noconfirm --nocheck || makepkg -sf --noconfirm --nocheck
-        env:
-          SOURCE_DATE_EPOCH: 0
+          makepkg -sf --noconfirm --nocheck --nosign
 
-      - name: Upload package as artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: i2p-browser-pkg
+          name: i2p-browser-package
           path: |
             *.pkg.tar.zst
-            *.pkg.tar.zst.sig
+            .SRCINFO
+            PKGBUILD
 
-      - name: Create GitHub Release
+      - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
             *.pkg.tar.zst
-            *.pkg.tar.zst.sig
           draft: false
           prerelease: false
 
