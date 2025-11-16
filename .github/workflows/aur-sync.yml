@@ -4,40 +4,50 @@ on:
   push:
     branches:
       - main
-    paths:
-      - PKGBUILD
-      - .SRCINFO
-  workflow_dispatch:
 
 jobs:
   sync:
+    name: Sync GitHub → AUR
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Setup SSH
+      - name: Install dependencies
+        run: |
+          sudo pacman -Sy --noconfirm pacman-contrib
+
+      - name: Generate .SRCINFO
+        run: |
+          makepkg --printsrcinfo > .SRCINFO
+
+      - name: Add AUR SSH key
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$AUR_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+          echo "$AUR_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf "Host aur.archlinux.org\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
 
-          printf "Host aur.archlinux.org\n\tUser aur\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
-
-      - name: Configure git
+      - name: Set Git identity
         run: |
-          git remote remove origin || true
-          git remote add origin ssh://aur@aur.archlinux.org/i2p-browser.git
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
 
-          git config user.name "Trytonottry"
-          git config user.email "trytonottry@proton.me"
-
-      - name: Push to AUR
+      - name: Add AUR remote
         run: |
-          git add PKGBUILD .SRCINFO || true
-          git commit -m "Sync from GitHub $(date -Iseconds)" || true
-          git push -f origin master
-        env:
-          AUR_KEY: ${{ secrets.AUR_KEY }}
+          git remote remove aur 2>/dev/null || true
+          git remote add aur ssh://aur@aur.archlinux.org/i2p-browser.git
+
+      - name: Commit & push to AUR
+        run: |
+          git add PKGBUILD .SRCINFO
+          git commit -m "Auto-sync from GitHub" || echo "Nothing to commit"
+
+          # главное — пушим именно HEAD → master
+          git push aur HEAD:master
+
 
 
