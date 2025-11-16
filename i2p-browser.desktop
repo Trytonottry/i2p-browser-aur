@@ -1,9 +1,9 @@
 [Desktop Entry]
 Name=I2P Browser
-Comment=Anonymous web browser via I2P network
-Exec=i2p-browser %u
-Icon=firefox
+Comment=Anonymous browsing via I2P
+Exec=i2p-browser
+Icon=i2p-browser
 Terminal=false
 Type=Application
 Categories=Network;WebBrowser;Security;
-StartupWMClass=I2P Browser
+StartupNotify=true

@@ -1,5 +1,6 @@
 PKGNAME = i2p-browser
 
+# Remote names — подстрой если нужно
 GITHUB_REMOTE = github
 AUR_REMOTE = origin
 
