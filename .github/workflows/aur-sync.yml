@@ -1,0 +1,33 @@
+name: Sync to AUR
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - aur/**
+
+jobs:
+  aur:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up SSH
+        run: |
+          install -m 600 -D /dev/null ~/.ssh/id_ed25519
+          echo "$AUR_KEY" > ~/.ssh/id_ed25519
+          printf "Host aur.archlinux.org\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
+
+      - name: Push to AUR
+        run: |
+          cd aur
+          git init
+          git remote add origin ssh://aur@aur.archlinux.org/i2p-browser.git
+          git add .
+          git commit -m "Sync from GitHub $(date -Iseconds)" || true
+          git push -f origin master
+        env:
+          AUR_KEY: ${{ secrets.AUR_KEY }}
+
