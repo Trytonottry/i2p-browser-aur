@@ -7,9 +7,6 @@ on:
     paths:
       - PKGBUILD
       - .SRCINFO
-      - '*.install'
-      - '*.patch'
-      
   workflow_dispatch:
 
 jobs:
@@ -21,20 +18,26 @@ jobs:
 
       - name: Setup SSH
         run: |
-          install -m 600 -D /dev/null ~/.ssh/id_ed25519
+          mkdir -p ~/.ssh
           echo "$AUR_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
           printf "Host aur.archlinux.org\n\tUser aur\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
+
+      - name: Configure git
+        run: |
+          git remote remove origin || true
+          git remote add origin ssh://aur@aur.archlinux.org/i2p-browser.git
+
+          git config user.name "Trytonottry"
+          git config user.email "trytonottry@proton.me"
 
       - name: Push to AUR
         run: |
-          git init
-          git config user.name "YourName"
-          git config user.email "you@example.com"
-          git remote add origin ssh://aur@aur.archlinux.org/i2p-browser.git
-
           git add PKGBUILD .SRCINFO || true
           git commit -m "Sync from GitHub $(date -Iseconds)" || true
           git push -f origin master
         env:
           AUR_KEY: ${{ secrets.AUR_KEY }}
+
 
