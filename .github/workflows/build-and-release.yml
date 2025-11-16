@@ -10,24 +10,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    container:
+      image: archlinux:latest
+      options: --privileged
+
     steps:
+      - name: Install git
+        run: pacman -Sy --noconfirm git
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install build deps
         run: |
-          sudo pacman -Syu --noconfirm
-          sudo pacman -S --noconfirm \
-            base-devel \
-            namcap \
-            pkgconf \
-            git
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel namcap
 
       - name: Create build user
         run: |
-          sudo useradd -m builder
-          sudo passwd -d builder
-          sudo bash -c "echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
       - name: Build package
         run: |
@@ -48,9 +50,10 @@ jobs:
           name: build-artifacts
           path: artifacts/
 
-      - name: Create GitHub Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
