@@ -1,6 +1,6 @@
 # Maintainer: Trytonottry <trytonottry@proton.me>
 pkgname=i2p-browser
-pkgver=2.0-beta4
+pkgver=2.0_beta4
 pkgrel=1
 pkgdesc="I2P Browser Bundle for Linux (Firefox ESR with I2P routing integration)"
 arch=('x86_64')
