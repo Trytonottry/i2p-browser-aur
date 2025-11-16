@@ -5,27 +5,32 @@ on:
     branches:
       - main
     paths:
-      - aur/**
+      - PKGBUILD
+      - .SRCINFO
+      - '*.install'
+      - '*.patch'
 
 jobs:
-  aur:
+  sync:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up SSH
+      - name: Setup SSH
         run: |
           install -m 600 -D /dev/null ~/.ssh/id_ed25519
           echo "$AUR_KEY" > ~/.ssh/id_ed25519
-          printf "Host aur.archlinux.org\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
+          printf "Host aur.archlinux.org\n\tUser aur\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
 
       - name: Push to AUR
         run: |
-          cd aur
           git init
+          git config user.name "YourName"
+          git config user.email "you@example.com"
           git remote add origin ssh://aur@aur.archlinux.org/i2p-browser.git
-          git add .
+
+          git add PKGBUILD .SRCINFO || true
           git commit -m "Sync from GitHub $(date -Iseconds)" || true
           git push -f origin master
         env:
