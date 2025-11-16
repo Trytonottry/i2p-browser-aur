@@ -1,4 +1,10 @@
 # i2p-browser (AUR package)
+![PKGBUILD CI](https://github.com/Trytonottry/i2p-browser-aur/actions/workflows/pkgbuild-ci.yml/badge.svg)
+![Build & Release](https://github.com/Trytonottry/i2p-browser-aur/actions/workflows/build-and-release.yml/badge.svg)
+![GitHub release](https://img.shields.io/github/v/release/Trytonottry/i2p-browser-aur)
+![AUR version](https://img.shields.io/aur/version/i2p-browser)
+![License](https://img.shields.io/github/license/Trytonottry/i2p-browser-aur)
+![Repo size](https://img.shields.io/github/repo-size/Trytonottry/i2p-browser-aur)
 
 This package provides the official I2P Browser Bundle for Linux.
 It is a Firefox ESR build preconfigured to work inside the I2P network.
