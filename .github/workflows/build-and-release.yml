@@ -33,34 +33,47 @@ jobs:
             python-srcinfo \
             sudo
 
-      - name: Install pkgfmt from AUR
-        run: |
-          git clone https://aur.archlinux.org/pkgfmt.git
-          cd pkgfmt
-          makepkg -si --noconfirm --nocheck
-          cd ..
-          rm -rf pkgfmt
-
-      - name: Create build user
+      # === СОЗДАЁМ ПОЛЬЗОВАТЕЛЯ builder ДО ВСЕГО ===
+      - name: Create build user (builder)
         run: |
           useradd -m -G wheel builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+          # Даем права на /usr/bin и т.д.
+          chown -R builder:builder /usr/bin /usr/lib
 
-      - name: Trust keys
+      # === УСТАНАВЛИВАЕМ pkgfmt ОТ builder ===
+      - name: Install pkgfmt from AUR (as builder)
+        run: |
+          sudo -u builder bash -c '
+            set -e
+            cd /tmp
+            git clone https://aur.archlinux.org/pkgfmt.git
+            cd pkgfmt
+            makepkg -si --noconfirm --nocheck --nosign
+          '
+
+      # === Инициализация keyring ===
+      - name: Initialize pacman keys
         run: |
           pacman-key --init
           pacman-key --populate archlinux
 
+      # === Генерация .SRCINFO ===
       - name: Generate .SRCINFO (as builder)
         run: |
           sudo -u builder bash -c "cd $(pwd) && makepkg --printsrcinfo > .SRCINFO"
 
+      # === Lint & Format ===
       - name: Lint & Format (as builder)
         run: |
-          sudo -u builder bash -c "cd $(pwd) && pkgfmt -w PKGBUILD || true"
-          sudo -u builder bash -c "cd $(pwd) && namcap PKGBUILD || true"
+          sudo -u builder bash -c "
+            cd $(pwd) &&
+            pkgfmt -w PKGBUILD || true &&
+            namcap PKGBUILD || true
+          "
 
-      - name: Manual download fallback (as builder)
+      # === Скачивание архива с fallback ===
+      - name: Download i2p-browser.tar.xz (as builder)
         run: |
           sudo -u builder bash -c '
             set -e
@@ -79,23 +92,26 @@ jobs:
                   break
                 fi
               done
-              [[ -f "i2p-browser.tar.xz" ]] || exit 1
+              [[ -f "i2p-browser.tar.xz" ]] || { echo "Download failed"; exit 1; }
             fi
           '
 
-      - name: Build package (as builder, no sign)
+      # === Сборка пакета ===
+      - name: Build package (as builder)
         run: |
           sudo -u builder bash -c "cd $(pwd) && makepkg -sf --noconfirm --nocheck --nosign"
 
-      - name: Upload artifact
+      # === Загрузка артефакта ===
+      - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: i2p-browser-package
+          name: i2p-browser-pkg
           path: |
             *.pkg.tar.zst
             .SRCINFO
             PKGBUILD
 
+      # === Релиз ===
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
