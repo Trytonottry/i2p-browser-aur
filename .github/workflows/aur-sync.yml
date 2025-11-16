@@ -15,7 +15,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- Запоминаем старый pkgver (до синка)
+      # --- Read previous pkgver
       - name: Read previous pkgver
         id: oldver
         run: |
@@ -26,22 +26,14 @@ jobs:
             echo "version=0" >> $GITHUB_OUTPUT
           fi
 
-      # --- Генерация .SRCINFO через официальный Arch Linux контейнер
-      - name: Generate .SRCINFO in Arch container
-        run: |
-          docker run --rm -v "$PWD":/build -w /build archlinux bash -c "
-            pacman -Sy --noconfirm pacman-contrib base-devel &&
-            makepkg --printsrcinfo > .SRCINFO
-          "
-
-      # --- Читаем новый pkgver
+      # --- Read new pkgver (после изменений из GitHub)
       - name: Read new pkgver
         id: newver
         run: |
           source PKGBUILD
           echo "version=$pkgver" >> $GITHUB_OUTPUT
 
-      # --- Добавление SSH ключа для AUR
+      # --- Add AUR SSH key
       - name: Add AUR SSH key
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
@@ -57,26 +49,27 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      # --- remote AUR
+      # --- Add AUR remote
       - name: Add AUR remote
         run: |
           git remote remove aur 2>/dev/null || true
           git remote add aur ssh://aur@aur.archlinux.org/i2p-browser.git
 
-      # --- Commit + push в AUR
+      # --- Commit + push to AUR
       - name: Push to AUR
         run: |
           git add PKGBUILD .SRCINFO
           git commit -m "Auto sync from GitHub" || true
           git push aur HEAD:master || true
 
-      # --- Если версия изменилась — создаём тег
+      # --- Auto GitHub tag if pkgver changed
       - name: Create GitHub Tag
         if: ${{ steps.oldver.outputs.version != steps.newver.outputs.version }}
         run: |
           TAG="v${{ steps.newver.outputs.version }}"
           git tag "$TAG"
           git push origin "$TAG"
+
 
 
 
