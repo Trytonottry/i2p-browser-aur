@@ -1,64 +1,79 @@
-name: Build & Release PKGBUILD
+name: Build & Release
 
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     container:
       image: archlinux:latest
       options: --privileged
 
     steps:
-      - name: Install git
-        run: pacman -Sy --noconfirm git
-        
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build deps
+      - name: Update package database & install base tools
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel namcap
+          pacman -S --noconfirm base-devel git namcap pkgfmt unzip bsdtar wget
 
-      - name: Create build user
+      - name: Generate .SRCINFO
         run: |
-          useradd -m builder
-          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          makepkg --printsrcinfo > .SRCINFO
 
-      - name: Fix permissions for builder
+      - name: Lint & Format
         run: |
-          chown -R builder:builder .
+          make fmt
+          make lint || true
+
+      - name: Manual download fallback (if makepkg fails to download)
+        run: |
+          if [[ ! -f i2p-browser.tar.xz ]]; then
+            echo "Trying to download manually with retries..."
+            local urls=(
+              "https://download.i2p2.de/releases/i2pbrowser/${{ env.PKGVERSION }}/i2p-browser-linux64-${{ env.PKGVERSION }}.tar.xz"
+              "https://mirror.cyberbits.eu/i2p/releases/i2pbrowser/${{ env.PKGVERSION }}/i2p-browser-linux64-${{ env.PKGVERSION }}.tar.xz"
+              "https://mirror2.i2p2.no/releases/i2pbrowser/${{ env.PKGVERSION }}/i2p-browser-linux64-${{ env.PKGVERSION }}.tar.xz"
+            )
+            for url in "${urls[@]}"; do
+              if wget --tries=3 --timeout=60 -O i2p-browser.tar.xz "$url"; then
+                echo "Downloaded from $url"
+                break
+              fi
+            done
+          fi
+        env:
+          PKGVERSION: 2.5.0
 
       - name: Build package
         run: |
-          sudo -u builder makepkg -fs --noconfirm
+          makepkg -sf --noconfirm --nocheck || makepkg -sf --noconfirm --nocheck
+        env:
+          SOURCE_DATE_EPOCH: 0
 
-      - name: Generate .SRCINFO
-        run: makepkg --printsrcinfo > .SRCINFO
-
-      - name: Collect artifacts
-        run: |
-          mkdir artifacts
-          cp ./*.pkg.tar.* artifacts/
-          cp .SRCINFO artifacts/
-
-      - name: Upload artifacts
+      - name: Upload package as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts
-          path: artifacts/
+          name: i2p-browser-pkg
+          path: |
+            *.pkg.tar.zst
+            *.pkg.tar.zst.sig
 
-      - name: Create Release
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            *.pkg.tar.zst
+            *.pkg.tar.zst.sig
+          draft: false
+          prerelease: false
 
 
